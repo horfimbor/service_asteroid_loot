@@ -1,5 +1,5 @@
 [package]
-name = "template_service"
+name = "service_asteroid_loot"
 version = "0.1.0"
 authors = ["aedius"]
 edition = "2018"

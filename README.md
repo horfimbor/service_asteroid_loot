@@ -1,4 +1,3 @@
-# template_service
-template for all services for Hotfimbor
+# asteroid_loot_service
 
-change TEMPLATENAME by the name of the service
+this service is a loot box for fast engagement loop
