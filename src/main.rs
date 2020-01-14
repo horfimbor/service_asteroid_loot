@@ -78,6 +78,12 @@ mod mod_service {
 }
 
 fn main() {
+    let _guard = sentry::init("http://8de1844f5c2c414dae0931f8254b1c07@sentry-base:9000/3");
+
+    sentry::capture_message("Hello World!", sentry::Level::Info);
+
+    sentry::integrations::panic::register_panic_handler();
+
     let server = ServiceServer::new();
 
     server.start();
