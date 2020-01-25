@@ -1,20 +1,36 @@
 use crate::mod_service::ServiceServer;
 
 mod mod_service {
-    use std::fs;
+    use std::{env, fs};
+    use std::collections::HashMap;
     use std::io::Read;
     use std::path::Path;
 
-    use tiny_http::{Request, Response, Server};
+    use tiny_http::{Method, Request, Response, Server, StatusCode};
+
+    const ENV_SENTRY_DSN: &str = "MOD_SERVICE_SENTRY_DSN";
 
     pub struct ServiceServer {
-        server: tiny_http::Server
+        server: tiny_http::Server,
+        get: HashMap<String, fn(Request)>,
     }
 
     impl ServiceServer {
         pub fn new() -> Self {
+            match env::var(&ENV_SENTRY_DSN) {
+                Ok(val) => {
+                    let _guard = sentry::init(val);
+
+                    sentry::capture_message("Hello World!", sentry::Level::Info);
+
+                    sentry::integrations::panic::register_panic_handler();
+                }
+                Err(_e) => panic!("mod_token require an env value for MOD_TOKEN_SECRET"),
+            }
+
             ServiceServer {
-                server: Server::http("0.0.0.0:8000").unwrap()
+                server: Server::http("0.0.0.0:8000").unwrap(),
+                get: HashMap::<String, fn(Request)>::new(),
             }
         }
 
@@ -28,28 +44,60 @@ mod mod_service {
                              request.url(),
                              request.headers(),
                     );
-
-                    let url = request.url().to_string();
-                    let path = Path::new(&url);
-
-                    let metadata = fs::metadata(&path);
-
-
-                    if metadata.is_ok() && metadata.unwrap().is_file() {
-                        let file = fs::File::open(&path).unwrap();
-                        let mut response = tiny_http::Response::from_file(file);
-                        let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/javascript"[..]).unwrap();
-
-                        response.add_header(header);
-                        add_cors(&request, &mut response);
-
-                        request.respond(response).unwrap();
-                    } else {
-                        let mut response = Response::from_string("hello world");
-                        add_cors(&request, &mut response);
-                        request.respond(response).unwrap();
+                    match self.handle(request, &dbs) {
+                        Err(_e) => {
+                            println!("cannot respond")
+                        }
+                        Ok(()) => {}
                     }
                 }
+            }
+        }
+
+        fn handle(&self, request: Request, dbs: &Dbs) -> Result<(), IoError> {
+            if request.method() == &Method::Post {
+                self.handle_post(request, &dbs)
+            } else if request.method() == &Method::Get {
+                self.handle_get(request)
+            } else if request.method() == &Method::Options {
+                self.handle_option(request)
+            } else {
+                let mut response = Response::new_empty(StatusCode(405));
+                add_cors(&request, &mut response);
+                request.respond(response)
+            }
+        }
+
+        fn handle_get(&self, request: Request) -> Result<(), IoError> {
+            let url = request.url().to_string();
+            let path = Path::new(&url);
+
+            let metadata = fs::metadata(&path);
+
+            if metadata.is_ok() && metadata.unwrap().is_file() {
+                let file = fs::File::open(&path).unwrap();
+                let mut response = tiny_http::Response::from_file(file);
+                let header = tiny_http::Header::from_bytes(&b"Content-Type"[..], &b"application/javascript"[..]).unwrap();
+
+                response.add_header(header);
+                add_cors(&request, &mut response);
+
+                request.respond(response).unwrap();
+            }
+
+            if authorized {
+                match self.get.contains_key(&url) {
+                    Some(fn_get) => request.respond(response),
+                    None => {
+                        let mut response = Response::new_empty(StatusCode(404));
+                        add_cors(&request, &mut response);
+                        request.respond(response)
+                    }
+                }
+            } else {
+                let mut response = Response::new_empty(StatusCode(403));
+                add_cors(&request, &mut response);
+                request.respond(response)
             }
         }
     }
@@ -78,12 +126,6 @@ mod mod_service {
 }
 
 fn main() {
-    let _guard = sentry::init("http://8de1844f5c2c414dae0931f8254b1c07@sentry-base:9000/3");
-
-    sentry::capture_message("Hello World!", sentry::Level::Info);
-
-    sentry::integrations::panic::register_panic_handler();
-
     let server = ServiceServer::new();
 
     server.start();
