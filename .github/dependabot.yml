@@ -1,0 +1,20 @@
+version: 2
+updates:
+- package-ecosystem: cargo
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "18:00"
+    timezone: Europe/Belfast
+  open-pull-requests-limit: 10
+  target-branch: master
+  reviewers:
+  - Aedius
+  ignore:
+  - dependency-name: openssl
+    versions:
+    - 0.10.32
+    - 0.10.33
+  - dependency-name: byteorder
+    versions:
+    - 1.4.2
